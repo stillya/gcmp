@@ -50,6 +50,7 @@ func main() {
 		b := make([]byte, 5000)
 
 		n, sAddr, err := conn.ReadFromIP(b)
+
 		if err != nil {
 			log.Printf("ERROR Can't read from IP address, %v", err)
 			break
@@ -69,7 +70,12 @@ func handleMessage(b []byte, sAddr *net.IPAddr) {
 	nP := NuclearProtocol{}
 	nP.Unmarshal(icmp.Data)
 
-	log.Printf("INFO Received %s", nP.String())
+	log.Printf("INFO Received ICMP %s", icmp.String())
+	if icmp.Type == 0 { // echo reply
+		log.Printf("INFO Received ICMP echo reply %s", icmp.String())
+		return
+	}
+	log.Printf("INFO Received Nuclear %s", nP.String())
 
 	if nP.MagicNumber == MAGIC_NUMBER {
 
@@ -80,10 +86,12 @@ func handleMessage(b []byte, sAddr *net.IPAddr) {
 			Type:        0,
 			Code:        0,
 			CheckSum:    0,
-			Identifier:  0,
-			SequenceNum: 0,
-			Data:        []byte{'P', 'O', 'N', 'G'},
+			Identifier:  icmp.Identifier,
+			SequenceNum: icmp.SequenceNum,
+			Data:        icmp.Data,
 		}
+
+		resp.CheckSum = CSum(resp.Marshal())
 
 		conn, err := net.Dial("ip:icmp", sAddr.String())
 		if err != nil {
