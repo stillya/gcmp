@@ -47,7 +47,7 @@ func main() {
 	}()
 
 	for {
-		b := make([]byte, 5000)
+		b := make([]byte, 128)
 
 		n, sAddr, err := conn.ReadFromIP(b)
 
@@ -71,13 +71,13 @@ func handleMessage(b []byte, sAddr *net.IPAddr) {
 	nP.Unmarshal(icmp.Data)
 
 	log.Printf("INFO Received ICMP %s", icmp.String())
-	if icmp.Type == 0 { // echo reply
+	if icmp.Type == EchoReply { // echo reply
 		log.Printf("INFO Received ICMP echo reply %s", icmp.String())
 		return
 	}
 	log.Printf("INFO Received Nuclear %s", nP.String())
 
-	if nP.MagicNumber == MAGIC_NUMBER {
+	if nP.MagicNumber == MagicNumber {
 
 	} else {
 		log.Printf("INFO Wrong magic number") // response common ping
@@ -112,7 +112,7 @@ func handleMessage(b []byte, sAddr *net.IPAddr) {
 			return
 		}
 
-		log.Printf("INFO Sent %s", resp.String())
+		log.Printf("INFO Sent to %s, data - %s", sAddr, resp.String())
 		return
 	}
 }

@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	MAGIC_NUMBER       = 0xDEAD
-	PING         uint8 = 1
-	NUC          uint8 = 5
+	MagicNumber       = 0xDEAD
+	EchoReply   uint8 = 0
+	NUC         uint8 = 5
 )
 
 type ICMP struct {
