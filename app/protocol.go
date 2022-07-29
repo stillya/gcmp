@@ -8,7 +8,9 @@ import (
 const (
 	MagicNumber       = 0xDEAD
 	EchoReply   uint8 = 0
-	NUC         uint8 = 5
+	PEW         uint8 = 5 // Test Command
+	NUC         uint8 = 6 // Nuclear Attack Command
+	DEFDATALEN  uint8 = 56
 )
 
 type ICMP struct {
@@ -21,9 +23,13 @@ type ICMP struct {
 }
 
 type NuclearProtocol struct {
-	MagicNumber uint32 // 0xDEAD
-	Command     uint8
-	Credentials [4]uint8
+	MagicNumber uint32   // 0xDEAD
+	Command     uint8    // 0x00
+	Credentials [4]uint8 // credentials
+}
+
+func EstimateSizeBuffer() uint8 {
+	return DEFDATALEN
 }
 
 func (icmp *ICMP) String() string {
