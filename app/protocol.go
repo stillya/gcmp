@@ -8,6 +8,7 @@ import (
 const (
 	MagicNumber       = 0xDEAD
 	EchoReply   uint8 = 0
+	EchoRequest uint8 = 8
 	PEW         uint8 = 5 // Test Command
 	NUC         uint8 = 6 // Nuclear Attack Command
 	DEFDATALEN  uint8 = 56
@@ -29,7 +30,7 @@ type NuclearProtocol struct {
 }
 
 func EstimateSizeBuffer() uint8 {
-	return DEFDATALEN
+	return DEFDATALEN + 8
 }
 
 func (icmp *ICMP) String() string {
