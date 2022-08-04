@@ -11,7 +11,7 @@ var code [4]uint8
 
 var flag = "flag{I_am_the_nuclear_bomb}"
 
-func _main() {
+func main() {
 
 	if len(os.Args) < 4 {
 		fmt.Println("Usage: server <address> <code> <flag>")

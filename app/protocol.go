@@ -30,7 +30,7 @@ type NuclearProtocol struct {
 }
 
 func EstimateSizeBuffer() uint8 {
-	return DEFDATALEN + 8
+	return DEFDATALEN
 }
 
 func (icmp *ICMP) String() string {
