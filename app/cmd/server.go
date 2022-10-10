@@ -2,93 +2,80 @@ package cmd
 
 import (
 	"fmt"
+	"gcmp/app/protocol"
 	log "github.com/go-pkgz/lgr"
 	"net"
-	"os"
 )
 
-var code [4]uint8
+type ServerCommand struct {
+	Address string   `long:"addr" description:"address of interface"`
+	Code    [4]uint8 `long:"code" description:"code for authentication purposes"`
+	Flag    string   `short:"f" long:"flag" description:"flag for CTF" default:"flag{I_am_the_nuclear_bomb}"`
+}
 
-var flag = "flag{I_am_the_nuclear_bomb}"
-
-func main() {
-
-	if len(os.Args) < 4 {
-		fmt.Println("Usage: server <address> <code> <flag>")
-		os.Exit(1)
-	}
-
-	addr := os.Args[1]
-
-	for i, v := range os.Args[2] {
-		code[i] = uint8(v - '0')
-	}
-
-	flag = os.Args[3]
-
-	fmt.Printf("code - %v\n", code)
-	fmt.Printf("flag - %s\n", flag)
-
-	log.Setup(log.Debug, log.CallerFile, log.CallerFunc, log.Msec, log.LevelBraces)
-
-	ipAddr, err := net.ResolveIPAddr("ip4", addr)
+func (s *ServerCommand) Execute(_ []string) error {
+	ipAddr, err := net.ResolveIPAddr("ip4", s.Address)
 	if err != nil {
-		log.Printf("ERROR Can't resolve IP address, %v", err)
-		return
+		return fmt.Errorf("can't resolve IP address %v", err)
 	}
 
 	conn, err := net.ListenIP("ip:icmp", ipAddr)
 	if err != nil {
-		log.Printf("ERROR Can't listen on IP address, %v", err)
-		return
+		return fmt.Errorf("can't listen on IP address, %v", err)
 	}
 
-	log.Printf("INFO Listening on %s", addr)
+	log.Printf("[INFO] listening on %s", s.Address)
 
 	defer func() {
 		err := conn.Close()
 		if err != nil {
+			log.Printf("[ERROR] can't close connection, %v", err)
 			return
 		}
 	}()
 
 	for {
-		b := make([]byte, EstimateSizeBuffer())
+		b := make([]byte, protocol.EstimateSizeBuffer())
 
 		n, sAddr, err := conn.ReadFromIP(b)
 
 		if err != nil {
-			log.Printf("ERROR Can't read from IP address, %v", err)
+			log.Printf("[ERROR] can't read from IP address, %v", err)
 			break
 		}
 
-		log.Printf("INFO Incoming connection from %s", sAddr)
-		log.Printf("INFO size of message %d", n)
+		log.Printf("[INFO] Incoming connection from %s", sAddr)
+		log.Printf("[INFO] size of message %d", n)
 
-		go handleMessage(b, sAddr)
+		go func() {
+			err := s.handleMessage(b, sAddr)
+			if err != nil {
+				log.Printf("[ERROR] failed to handle message, %v", err)
+			}
+		}()
 	}
-
+	return nil
 }
 
-func handleMessage(buf []byte, sAddr *net.IPAddr) {
-	icmp := ICMP{}
+func (s *ServerCommand) handleMessage(buf []byte, sAddr *net.IPAddr) error {
+	icmp := protocol.ICMP{}
 	icmp.Unmarshal(buf)
-	nP := NuclearProtocol{}
+	nP := protocol.NuclearProtocol{}
 	nP.Unmarshal(icmp.Data)
 
-	log.Printf("INFO Received ICMP %s", icmp.String())
-	if icmp.Type == EchoReply {
-		log.Printf("INFO Received ICMP echo reply %s", icmp.String())
-		return
+	if icmp.Type == protocol.EchoReply {
+		log.Printf("[INFO] Received ICMP echo reply %s", icmp.String())
+	} else {
+		log.Printf("[INFO] Received ICMP packet %s", icmp.String())
 	}
 
-	if nP.MagicNumber == MagicNumber {
-		log.Printf("INFO Received Nuclear %s", nP.String())
-		if nP.Credentials == code {
-			log.Printf("INFO Received command %d", nP.Command)
+	if nP.MagicNumber == protocol.MagicNumber {
+		log.Printf("[INFO] Received Nuclear %s", nP.String())
+		if nP.Credentials == s.Code {
+			log.Printf("[INFO] Received command %d", nP.Command)
 
-			resp := ICMP{
-				Type:        EchoReply,
+			resp := protocol.ICMP{
+				Type:        protocol.EchoReply,
 				Code:        0,
 				CheckSum:    0,
 				Identifier:  icmp.Identifier,
@@ -96,44 +83,42 @@ func handleMessage(buf []byte, sAddr *net.IPAddr) {
 			}
 
 			switch nP.Command {
-			case PEW:
-				d := &NuclearProtocol{MagicNumber: MagicNumber, Command: nP.Command, Credentials: [4]uint8{0, 0, 0, 0}}
+			case protocol.PEW:
+				d := &protocol.NuclearProtocol{MagicNumber: protocol.MagicNumber, Command: nP.Command, Credentials: [4]uint8{0, 0, 0, 0}}
 				resp.Data = d.Marshal()
-			case NUC:
-				d := &NuclearProtocol{MagicNumber: MagicNumber, Command: nP.Command, Credentials: [4]uint8{0, 0, 0, 0}}
+			case protocol.NUC:
+				d := &protocol.NuclearProtocol{MagicNumber: protocol.MagicNumber, Command: nP.Command, Credentials: [4]uint8{0, 0, 0, 0}}
 				resp.Data = d.Marshal()
-				resp.Data = append(resp.Data, []byte(flag)...)
+				resp.Data = append(resp.Data, []byte(s.Flag)...)
 			default:
-				log.Printf("ERROR Unknown command %d", nP.Command)
+				log.Printf("[ERROR] Unknown command %d", nP.Command)
 				resp.Data = []byte("what're u doing?")
 			}
 
-			resp.CheckSum = CSum(resp.Marshal())
+			resp.CheckSum = protocol.CSum(resp.Marshal())
 
 			conn, err := net.Dial("ip:icmp", sAddr.String())
 			if err != nil {
-				log.Printf("ERROR Can't dial IP address, %v", err)
-				return
+				return fmt.Errorf("can't dial ip address, %v", err)
 			}
 			defer func() {
 				err := conn.Close()
 				if err != nil {
-					log.Printf("ERROR Can't close connection, %v", err)
+					log.Printf("[ERROR] Can't close connection, %v", err)
 					return
 				}
 			}()
 
 			_, err = conn.Write(resp.Marshal())
 			if err != nil {
-				log.Printf("ERROR Can't write to IP address, %v", err)
-				return
+				return fmt.Errorf("can't write to ip address, %v", err)
 			}
 		}
 	} else {
-		log.Printf("INFO Wrong magic number") // response common ping
+		log.Printf("[INFO] Wrong magic number") // response common ping
 
-		resp := ICMP{
-			Type:        EchoReply,
+		resp := protocol.ICMP{
+			Type:        protocol.EchoReply,
 			Code:        0,
 			CheckSum:    0,
 			Identifier:  icmp.Identifier,
@@ -141,28 +126,25 @@ func handleMessage(buf []byte, sAddr *net.IPAddr) {
 			Data:        icmp.Data,
 		}
 
-		resp.CheckSum = CSum(resp.Marshal())
+		resp.CheckSum = protocol.CSum(resp.Marshal())
 
 		conn, err := net.Dial("ip:icmp", sAddr.String())
 		if err != nil {
-			log.Printf("ERROR Can't dial IP address, %v", err)
-			return
+			return fmt.Errorf("can't dial ip address, %v", err)
 		}
 		defer func() {
 			err := conn.Close()
 			if err != nil {
-				log.Printf("ERROR Can't close connection, %v", err)
-				return
+				log.Printf("[ERROR] Can't close connection, %v", err)
 			}
 		}()
 
 		_, err = conn.Write(resp.Marshal())
 		if err != nil {
-			log.Printf("ERROR Can't write to IP address, %v", err)
-			return
+			return fmt.Errorf("can't write to ip address, %v", err)
 		}
 	}
 
-	log.Printf("INFO Sent to %s", sAddr)
-	return
+	log.Printf("[INFO] Sent to %s", sAddr)
+	return nil
 }
